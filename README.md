@@ -24,6 +24,6 @@ gcc -std=c11 -Wall -Wextra src/rr.c -o rr.out -lncurses
 Para compilar e executar o SJF:
 
 ```sh
-gcc -Wall -Wextra -std=c11 src/sjf.c -o sjf
-./sjf
+gcc -Wall -Wextra -std=c11 src/sjf.c -o sjf.out
+./sjf.out
 ```
