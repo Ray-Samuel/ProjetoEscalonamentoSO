@@ -23,8 +23,8 @@ typedef struct Processo
     int restante; /* Tempo de CPU que ainda falta executar. */
     int admitido; /* Evita adicionar o processo varias vezes a fila. */
     Status status;
-    struct Processo *proximo;       /* Proximo no da lista de todos os processos. */
-    struct Processo *proximoNaFila; /* Proximo no da fila de prontos. */
+    struct Processo *proximoGlobal; /* Proximo no da lista de todos os processos. */
+    struct Processo *proximoPronto; /* Proximo no da fila de prontos. */
 } Processo;
 
 /* Fila FIFO: inicio sai primeiro e fim recebe os novos processos. */
@@ -33,7 +33,7 @@ typedef struct
     Processo *inicio;
     Processo *fim;
     int quantidade;
-} Fila;
+} FilaProntos;
 
 static const char *nomeStatus(Status status)
 {
@@ -66,8 +66,8 @@ static Processo *criarProcesso(int pid, int chegada, int burst)
     processo->restante = burst;
     processo->admitido = 0;
     processo->status = PRONTO;
-    processo->proximo = NULL;
-    processo->proximoNaFila = NULL;
+    processo->proximoGlobal = NULL;
+    processo->proximoPronto = NULL;
     return processo;
 }
 
@@ -76,7 +76,7 @@ static void adicionarProcesso(Processo **lista, Processo *processo)
     /* Percorre a lista ate encontrar o ponteiro onde o novo no sera ligado. */
     while (*lista != NULL)
     {
-        lista = &(*lista)->proximo;
+        lista = &(*lista)->proximoGlobal;
     }
 
     *lista = processo;
@@ -101,66 +101,68 @@ static void liberarProcessos(Processo *lista)
     /* Libera cada no alocado antes de encerrar o programa. */
     while (lista != NULL)
     {
-        Processo *proximo = lista->proximo;
+        Processo *proximoGlobal = lista->proximoGlobal;
         free(lista);
-        lista = proximo;
+        lista = proximoGlobal;
     }
 }
 
 /* A fila de prontos encadeia diretamente os nos dos processos. */
-static void enfileirar(Fila *fila, Processo *processo)
+static void enfileirar(FilaProntos *filaProntos, Processo *processo)
 {
-    processo->proximoNaFila = NULL;
-    if (fila->fim == NULL)
+    processo->proximoPronto = NULL;
+    if (filaProntos->fim == NULL)
     {
         /* Quando a fila esta vazia, o processo e simultaneamente inicio e fim. */
-        fila->inicio = processo;
+        filaProntos->inicio = processo;
     }
     else
     {
-        fila->fim->proximoNaFila = processo;
+        filaProntos->fim->proximoPronto = processo;
     }
 
-    fila->fim = processo;
-    fila->quantidade++;
+    filaProntos->fim = processo;
+    filaProntos->quantidade++;
 }
 
-static Processo *desenfileirar(Fila *fila)
+static Processo *desenfileirar(FilaProntos *filaProntos)
 {
-    Processo *processo = fila->inicio;
+    Processo *processo = filaProntos->inicio;
     if (processo == NULL)
     {
         return NULL;
     }
 
     /* Retira o primeiro da fila e atualiza o fim se ela ficar vazia. */
-    fila->inicio = processo->proximoNaFila;
-    if (fila->inicio == NULL)
+    filaProntos->inicio = processo->proximoPronto;
+    if (filaProntos->inicio == NULL)
     {
-        fila->fim = NULL;
+        filaProntos->fim = NULL;
     }
 
-    processo->proximoNaFila = NULL;
-    fila->quantidade--;
+    processo->proximoPronto = NULL;
+    filaProntos->quantidade--;
     return processo;
 }
 
 /* Coloca na fila, na ordem da lista, os processos que ja chegaram. */
-static void admitirProcessos(Processo *processos, Fila *fila, int tempoAtual)
+static void admitirProcessos(Processo *processos, FilaProntos *filaProntos,
+                             int tempoAtual)
 {
     for (Processo *processo = processos; processo != NULL;
-         processo = processo->proximo)
+         processo = processo->proximoGlobal)
     {
         if (!processo->admitido && processo->chegada <= tempoAtual)
         {
-            enfileirar(fila, processo);
+            enfileirar(filaProntos, processo);
             /* Marcado para que o mesmo processo nao seja admitido novamente. */
             processo->admitido = 1;
         }
     }
 }
 
-static void mostrarInterface(const Processo *processos, const Fila *fila,
+static void mostrarInterface(const Processo *processos,
+                             const FilaProntos *filaProntos,
                              int tempoAtual, int pidExecutando,
                              const int historico[], int quantidadeExecucoes,
                              int concluido)
@@ -176,7 +178,7 @@ static void mostrarInterface(const Processo *processos, const Fila *fila,
     /* Mostra todos os processos percorrendo a lista encadeada. */
     int linha = 4;
     for (const Processo *processo = processos; processo != NULL;
-         processo = processo->proximo)
+         processo = processo->proximoGlobal)
     {
         mvprintw(linha++, 0, "P%-9d %-10d %-10d %-12d %-14s",
                  processo->pid,
@@ -196,15 +198,15 @@ static void mostrarInterface(const Processo *processos, const Fila *fila,
 
     /* Exibe a fila na mesma ordem em que os processos serao executados. */
     mvprintw(11, 0, "Fila de prontos: ");
-    if (fila->inicio == NULL)
+    if (filaProntos->inicio == NULL)
     {
         printw("(vazia)");
     }
     else
     {
         int primeiro = 1;
-        for (const Processo *processo = fila->inicio; processo != NULL;
-             processo = processo->proximoNaFila)
+        for (const Processo *processo = filaProntos->inicio; processo != NULL;
+             processo = processo->proximoPronto)
         {
             printw("%sP%d", primeiro ? "" : " -> ", processo->pid);
             primeiro = 0;
@@ -234,7 +236,7 @@ int main(void)
     /* Os processos de exemplo ficam ligados em uma lista encadeada. */
     Processo *processos = NULL;
     /* A fila e independente da lista: guarda a ordem dos processos prontos. */
-    Fila fila = {NULL, NULL, 0};
+    FilaProntos filaProntos = {NULL, NULL, 0};
     /* O historico guarda os PIDs na ordem em que receberam a CPU. */
     int historico[MAX_EXECUCOES];
     int quantidadeExecucoes = 0;
@@ -242,11 +244,11 @@ int main(void)
     int tempoAtual = 0;
 
     /* Cada cadastro informa PID, tempo de chegada e burst de CPU. */
-    if (criarEAdicionarProcesso(&processos, 1, 0, 8) ||
-        criarEAdicionarProcesso(&processos, 2, 0, 6) ||
-        criarEAdicionarProcesso(&processos, 3, 1, 10) ||
-        criarEAdicionarProcesso(&processos, 4, 2, 5) ||
-        criarEAdicionarProcesso(&processos, 5, 4, 7))
+    if (criarEAdicionarProcesso(&processos, 1, 0, 8) != EXIT_SUCCESS ||
+        criarEAdicionarProcesso(&processos, 2, 0, 6) != EXIT_SUCCESS ||
+        criarEAdicionarProcesso(&processos, 3, 1, 10) != EXIT_SUCCESS ||
+        criarEAdicionarProcesso(&processos, 4, 2, 5) != EXIT_SUCCESS ||
+        criarEAdicionarProcesso(&processos, 5, 4, 7) != EXIT_SUCCESS)
     {
         liberarProcessos(processos);
         fprintf(stderr, "Erro: nao foi possivel alocar um processo.\n");
@@ -263,13 +265,13 @@ int main(void)
     while (processosTerminados < MAX_PROCESSOS)
     {
         /* A cada instante, adiciona a fila os processos que ja chegaram. */
-        admitirProcessos(processos, &fila, tempoAtual);
+        admitirProcessos(processos, &filaProntos, tempoAtual);
 
-        Processo *processo = desenfileirar(&fila);
+        Processo *processo = desenfileirar(&filaProntos);
         if (processo == NULL)
         {
             /* Sem processos prontos, a CPU fica ociosa e o relogio avanca. */
-            mostrarInterface(processos, &fila, tempoAtual, 0, historico,
+            mostrarInterface(processos, &filaProntos, tempoAtual, 0, historico,
                              quantidadeExecucoes, 0);
             napms(QUANTUM * 1000);
             tempoAtual++;
@@ -291,7 +293,7 @@ int main(void)
 
         /* Registra o turno e mostra quem esta executando antes da pausa. */
         historico[quantidadeExecucoes++] = processo->pid;
-        mostrarInterface(processos, &fila, tempoAtual, processo->pid,
+        mostrarInterface(processos, &filaProntos, tempoAtual, processo->pid,
                          historico, quantidadeExecucoes, 0);
         /* A pausa em tempo real representa a execucao simulada do turno. */
         napms(tempoExecutado * 1000);
@@ -301,7 +303,7 @@ int main(void)
         tempoAtual += tempoExecutado;
 
         /* Processos que chegaram durante o turno entram antes do revezamento. */
-        admitirProcessos(processos, &fila, tempoAtual);
+        admitirProcessos(processos, &filaProntos, tempoAtual);
 
         if (processo->restante == 0)
         {
@@ -313,12 +315,12 @@ int main(void)
         {
             /* Se ainda falta CPU, volta ao fim da fila para esperar outro turno. */
             processo->status = PRONTO;
-            enfileirar(&fila, processo);
+            enfileirar(&filaProntos, processo);
         }
     }
 
     /* Mantem a tela final visivel ate o usuario pressionar Enter. */
-    mostrarInterface(processos, &fila, tempoAtual, 0, historico,
+    mostrarInterface(processos, &filaProntos, tempoAtual, 0, historico,
                      quantidadeExecucoes, 1);
     while (getch() != '\n')
     {
