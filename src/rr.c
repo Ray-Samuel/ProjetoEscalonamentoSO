@@ -89,11 +89,11 @@ static int criarEAdicionarProcesso(Processo **lista, int pid, int chegada,
     Processo *processo = criarProcesso(pid, chegada, burst);
     if (processo == NULL)
     {
-        return 0;
+        return EXIT_FAILURE;
     }
 
     adicionarProcesso(lista, processo);
-    return 1;
+    return EXIT_SUCCESS;
 }
 
 static void liberarProcessos(Processo *lista)
@@ -242,11 +242,11 @@ int main(void)
     int tempoAtual = 0;
 
     /* Cada cadastro informa PID, tempo de chegada e burst de CPU. */
-    if (!criarEAdicionarProcesso(&processos, 1, 0, 8) ||
-        !criarEAdicionarProcesso(&processos, 2, 0, 6) ||
-        !criarEAdicionarProcesso(&processos, 3, 1, 10) ||
-        !criarEAdicionarProcesso(&processos, 4, 2, 5) ||
-        !criarEAdicionarProcesso(&processos, 5, 4, 7))
+    if (criarEAdicionarProcesso(&processos, 1, 0, 8) ||
+        criarEAdicionarProcesso(&processos, 2, 0, 6) ||
+        criarEAdicionarProcesso(&processos, 3, 1, 10) ||
+        criarEAdicionarProcesso(&processos, 4, 2, 5) ||
+        criarEAdicionarProcesso(&processos, 5, 4, 7))
     {
         liberarProcessos(processos);
         fprintf(stderr, "Erro: nao foi possivel alocar um processo.\n");
