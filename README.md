@@ -15,8 +15,8 @@ O grupo é composto por:
 O escalonador Round Robin usa cinco processos de exemplo definidos no código e um quantum de 3 segundos. Para compilar e executar em um terminal com ncurses:
 
 ```sh
-gcc -std=c11 -Wall -Wextra src/rr.c -o rr -lncurses
-./rr
+gcc -std=c11 -Wall -Wextra src/rr.c -o rr.out -lncurses
+./rr.out
 ```
 
 ## SJF

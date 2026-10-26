@@ -5,7 +5,7 @@
 
 #define QUANTUM 3
 #define MAX_PROCESSOS 5
-#define MAX_EXECUCOES 32
+#define MAX_EXECUCOES 100
 
 typedef enum
 {
